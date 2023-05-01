@@ -1,0 +1,98 @@
+{
+  "project_info": {
+    "project_number": "889270744371",
+    "firebase_url": "https://fyp2v1-default-rtdb.firebaseio.com",
+    "project_id": "fyp2v1",
+    "storage_bucket": "fyp2v1.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:889270744371:android:947255e461a008a8acba46",
+        "android_client_info": {
+          "package_name": "com.example.ibeacon_scann"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDinVJSTmPNkk307ECJCdKmVmLdlmL56IY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:889270744371:android:0c2ed9f3ae44e418acba46",
+        "android_client_info": {
+          "package_name": "com.example.studentapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDinVJSTmPNkk307ECJCdKmVmLdlmL56IY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:889270744371:android:5c6a89b6a296a2d2acba46",
+        "android_client_info": {
+          "package_name": "com.example.teacherapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDinVJSTmPNkk307ECJCdKmVmLdlmL56IY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "889270744371-lr35vok6vclfhvifq9pokhjpirvhgah3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
