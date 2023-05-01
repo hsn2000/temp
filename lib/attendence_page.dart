@@ -361,8 +361,8 @@ class _StudentScreenState extends State<StudentScreen> {
     if (_authorized == "Not Authorized") {
       displayToast("Please authenticate before marking attendance");
       setState(() {
-      _isLoading = false;
-    });
+        _isLoading = false;
+      });
       return;
     } else {
       var section = null;
@@ -377,9 +377,9 @@ class _StudentScreenState extends State<StudentScreen> {
       if (section == null) {
         displayToast(
             "Please add your class and section accurately and then try again");
-            setState(() {
-      _isLoading = false;
-    });
+        setState(() {
+          _isLoading = false;
+        });
         return;
       }
       db = FirebaseDatabase.instance
@@ -431,8 +431,6 @@ class _StudentScreenState extends State<StudentScreen> {
 
     // Call your long-running function here
     markAttendance(bl);
-    
-
   }
 
   void _removeFromList(int index) {
@@ -537,6 +535,23 @@ class _StudentScreenState extends State<StudentScreen> {
             );
           }),
         ],
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(40.0),
+          child: Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Text('Location: {}',
+                    style: TextStyle(color: Colors.blue.shade600)),
+                // SizedBox(width: 10.0),
+                VerticalDivider(width: 10),
+                Text('Authenticated: {}',
+                    style: TextStyle(color: Colors.blue.shade600)),
+              ],
+            ),
+          ),
+        ),
       ),
       drawer: Drawer(
         backgroundColor: Colors.grey.shade800,
@@ -722,12 +737,28 @@ class _StudentScreenState extends State<StudentScreen> {
                   )
                 else
                   _isLoading
-                            ? Center(child: CircularProgressIndicator())
-                            : ListView(
-                    clipBehavior: Clip.antiAlias,
-                    children: widget.attend.map((bl) {
-                      return Center(
-                        child: GestureDetector(
+                      ? Center(
+                          child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(0, 20, 0, 0),
+                                  child: Text(
+                                    'Please wait while we authenticate you',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 15),
+                                  ),
+                                ),
+                              ]),
+                        )
+                      : ListView(
+                          clipBehavior: Clip.antiAlias,
+                          children: widget.attend.map((bl) {
+                            return Center(
+                              child: GestureDetector(
                                 onTap: () {
                                   _startFunction(bl);
                                   //print("tapped");
@@ -882,9 +913,9 @@ class _StudentScreenState extends State<StudentScreen> {
                                   ),
                                 ),
                               ),
-                      );
-                    }).toList(),
-                  ),
+                            );
+                          }).toList(),
+                        ),
               ],
             ),
           ),
@@ -898,13 +929,13 @@ class _StudentScreenState extends State<StudentScreen> {
             builder: (context) {
               return StatefulBuilder(builder: (context, setState) {
                 return AlertDialog(
-                    title: Text('Please Wait'),
+                    title: Text('Scanning'),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         CircularProgressIndicator(),
                         SizedBox(height: 16.0),
-                        Text('$_start seconds'),
+                        Text('Scannig Location'),
                       ],
                     ));
               });

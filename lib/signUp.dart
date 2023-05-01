@@ -93,6 +93,7 @@ class _SignUpState extends State<SignUp> {
       setState(() {
         errorMessage = "Invalid NU Email ID";
       });
+      Navigator.of(context).pop();
       return;
     }
     db = FirebaseDatabase.instance.ref().child("/UID/$enteredStudentID");
@@ -103,6 +104,7 @@ class _SignUpState extends State<SignUp> {
       setState(() {
         errorMessage = "This Student ID already exists.\nPlease Login instead";
       });
+      Navigator.of(context).pop();
       return;
     }
     String enteredPassword = passController.text.trim();
@@ -112,12 +114,14 @@ class _SignUpState extends State<SignUp> {
       setState(() {
         errorMessage = "Password Mismatch";
       });
+      Navigator.of(context).pop();
       return;
     } else if (enteredPassword.length < 6) {
       //displayToast("Password length should be minimum 6");
       setState(() {
         errorMessage = "Password length should be minimum 6";
       });
+      Navigator.of(context).pop();
       return;
     }
     try {
@@ -132,6 +136,7 @@ class _SignUpState extends State<SignUp> {
       });
       Navigator.push(context,
           MaterialPageRoute(builder: (BuildContext context) {
+            Navigator.of(context).pop();
         return const SignInFive();
       }));
     } on FirebaseAuthException catch (e) {
@@ -560,7 +565,26 @@ class _SignUpState extends State<SignUp> {
 
   Widget signUpButton(Size size) {
     return ElevatedButton(
-      onPressed: signUp,
+      onPressed: () {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return StatefulBuilder(builder: (context, setState) {
+              return AlertDialog(
+                  title: Text('Please Wait'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16.0),
+                      Text('Signing up'),
+                    ],
+                  ));
+            });
+          },
+        );
+        signUp();
+      },
       style: ElevatedButton.styleFrom(
           alignment: Alignment.center,
           elevation: size.height / 5,
