@@ -16,7 +16,20 @@ import 'controller/requirement_state_controller.dart';
 Future main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  await requestPermissions();
+  // await requestPermissions();
+  await Permission.location.request();
+  await Permission.locationWhenInUse.request();
+  await Permission.locationAlways.request();
+  await Permission.bluetoothScan.request();
+  await Permission.bluetoothConnect.request();
+  await Permission.bluetooth.request();
+  // if (Permission.location != PermissionStatus.granted) {
+  //   displayToast("Please Grant Location Permission");
+  // }
+
+  // if (Permission.bluetooth != PermissionStatus.granted) {
+  //   displayToast("Please Grant Bluetooth Permission");
+  // }
   Directory directory = await pathProvider.getApplicationDocumentsDirectory();
   Hive.init(directory.path);
   Hive.registerAdapter(studentSectionsAdapter());
