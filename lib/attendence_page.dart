@@ -267,7 +267,7 @@ class _StudentScreenState extends State<StudentScreen> {
     });
     var max_Rssi = -10000;
     var bleWithMaxRssi;
-    var bestAverage = 'mode';
+    var bestAverage = 'meanRSSI';
     beaconList.forEach((element) {
       if (beaconInfo[element][bestAverage] != 0.0) {
         if (max_Rssi < beaconInfo[element][bestAverage]) {
@@ -280,9 +280,16 @@ class _StudentScreenState extends State<StudentScreen> {
       setState(() {
         _locationStatus = bleLocations[bleWithMaxRssi];
       });
+      displayToast("Location Updated");
+      Future.delayed(Duration(minutes: 3), () {
+        setState(() {
+          _locationStatus = "Not Located";
+        });
+      });
     } else {
+      displayToast("Please Re-Scan");
       setState(() {
-        _locationStatus = 'Please Re-Scan';
+        _locationStatus = 'Not Located';
       });
     }
   }
@@ -319,7 +326,8 @@ class _StudentScreenState extends State<StudentScreen> {
       setState(() {
         attend.clear();
         allAttendance.forEach((key, value) async {
-          if(allAttendance[key][classRoom] == _authenticationStatus){
+          if (allAttendance[key]["classRoom"].toString().toUpperCase() ==
+              _locationStatus.toUpperCase()) {
             addAttendance(
               allAttendance[key]['classRoom'],
               allAttendance[key]['courseName'],
@@ -374,7 +382,7 @@ class _StudentScreenState extends State<StudentScreen> {
         _authenticationStatus = "Authenticated";
       });
       Navigator.of(context).pop();
-      Future.delayed(Duration(minutes: 5), () {
+      Future.delayed(Duration(minutes: 3), () {
         setState(() {
           _authenticationStatus = "Not Authenticated";
         });
@@ -415,7 +423,8 @@ class _StudentScreenState extends State<StudentScreen> {
           .ref()
           .child("/markAttendance/$attendanceID/${section}/$studentID");
       await db.set("P");
-      displayToast("Attendance Marked in ${attendanceObject.courseName}-$section");
+      displayToast(
+          "Attendance Marked in ${attendanceObject.courseName}-$section");
       setState(() {
         _authenticationStatus = "Not Authenticated";
         _locationStatus = "Not Located";
