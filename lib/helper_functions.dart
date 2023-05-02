@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -9,8 +10,8 @@ import 'package:image/image.dart' as img;
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 bool checkUserInput(String inputStr) {
-  RegExp regExp = new RegExp(
-      r'^k\d{6}$'); // pattern for matching 'k' followed by 5 digits
+  RegExp regExp =
+      new RegExp(r'^k\d{6}$'); // pattern for matching 'k' followed by 5 digits
   if (!regExp.hasMatch(inputStr)) {
     return false; // input does not match pattern
   } else {
@@ -40,15 +41,38 @@ img.Image cropFace(List<Face> faces, img.Image originalImage) {
   return faceImage;
 }
 
+Future<bool> requestPermissions() async {
+  Map<Permission, PermissionStatus> permissions = await [
+    Permission.location,
+    Permission.locationWhenInUse,
+    Permission.locationAlways,
+    Permission.bluetoothScan,
+    Permission.bluetoothConnect,
+    Permission.bluetooth,
+  ].request();
+
+  if (permissions[Permission.locationWhenInUse] != PermissionStatus.granted) {
+    displayToast("Please Grant Location Permission");
+    return false;
+  }
+
+  if (permissions[Permission.bluetoothScan] != PermissionStatus.granted ||
+      permissions[Permission.bluetoothConnect] != PermissionStatus.granted) {
+    displayToast("Please Grant Bluetooth Permission");
+    return false;
+  }
+  return true;
+}
+
 void askPermissions() async {
   // Request location permission
   var status = await Permission.locationAlways.status;
   if (status.isDenied) {
     var result = await Permission.locationAlways.request();
     if (result.isGranted) {
-      displayToast("Permission Granted");
+      displayToast("Location Permission Granted");
     } else {
-      displayToast("Permission Denied");
+      displayToast("Location Permission Denied");
     }
   }
   // Request Bluetooth permission
@@ -56,40 +80,63 @@ void askPermissions() async {
   if (status.isDenied) {
     var result = await Permission.bluetoothScan.request();
     if (result.isGranted) {
-      displayToast("Permission Granted");
+      displayToast("Bluetooth Permission Granted");
     } else {
-      displayToast("Permission Denied");
+      displayToast("Bluetooth Permission Denied");
+    }
+  }
+  // Request Bluetooth permission
+  status = await Permission.bluetoothConnect.status;
+  if (status.isDenied) {
+    var result = await Permission.bluetoothConnect.request();
+    if (result.isGranted) {
+      displayToast("Bluetooth Permission Granted");
+    } else {
+      displayToast("Bluetooth Permission Denied");
     }
   }
 }
 
-Future<geo.Position> determinePosition() async {
-  bool serviceEnabled;
-  geo.LocationPermission permission;
-  permission = await geo.Geolocator.requestPermission();
+// Future<geo.Position> determinePosition() async {
+//   bool serviceEnabled;
+//   geo.LocationPermission permission;
+//   permission = await geo.Geolocator.requestPermission();
 
-  permission = await geo.Geolocator.checkPermission();
-  if (permission == geo.LocationPermission.denied) {
-    permission = await geo.Geolocator.requestPermission();
-    if (permission == geo.LocationPermission.denied) {
-      displayToast('Location permissions are denied');
-      return Future.error('Location permissions are denied');
-    }
-  }
-  if (permission == geo.LocationPermission.deniedForever) {
-    displayToast(
-        'Location permissions are permanently denied, we cannot request permissions.');
-    return Future.error(
-        'Location permissions are permanently denied, we cannot request permissions.');
-  }
+//   permission = await geo.Geolocator.checkPermission();
+//   if (permission == geo.LocationPermission.denied) {
+//     permission = await geo.Geolocator.requestPermission();
+//     if (permission == geo.LocationPermission.denied) {
+//       displayToast('Location permissions are denied');
+//       return Future.error('Location permissions are denied');
+//     }
+//   }
+//   if (permission == geo.LocationPermission.deniedForever) {
+//     displayToast(
+//         'Location permissions are permanently denied, we cannot request permissions.');
+//     return Future.error(
+//         'Location permissions are permanently denied, we cannot request permissions.');
+//   }
 
-  serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) {
-    displayToast('Location services are disabled.');
-    return Future.error('Location services are disabled.');
-  }
+//   serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+//   if (!serviceEnabled) {
+//     displayToast('Location services are disabled.');
+//     return Future.error('Location services are disabled.');
+//   }
 
-  return await geo.Geolocator.getCurrentPosition();
+//   return await geo.Geolocator.getCurrentPosition();
+// }
+
+Future<String> getDeviceUID() async {
+  var UID;
+  var deviceInfo = DeviceInfoPlugin();
+  if (Platform.isIOS) {
+    var iosDeviceInfo = await deviceInfo.iosInfo;
+    UID = iosDeviceInfo.identifierForVendor; // unique ID on iOS
+  } else if (Platform.isAndroid) {
+    var androidDeviceInfo = await deviceInfo.androidInfo;
+    UID = androidDeviceInfo.id; // unique ID on Android
+  }
+  return UID;
 }
 
 int mean(List<int> list) {

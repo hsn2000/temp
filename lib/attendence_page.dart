@@ -29,13 +29,13 @@ const int scanDuration = 7;
 
 class StudentScreen extends StatefulWidget {
   StudentScreen({Key? key}) : super(key: key);
-  List<attendanceModel> attend = attendance;
 
   @override
   State<StudentScreen> createState() => _StudentScreenState();
 }
 
-List<attendanceModel> attendance = [];
+// List<attendanceModel> attendance = [];
+List<attendanceModel> attend = [];
 
 class _StudentScreenState extends State<StudentScreen> {
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
@@ -49,9 +49,11 @@ class _StudentScreenState extends State<StudentScreen> {
   String teacherName = "";
   String time = "";
   String id = "";
+  // String _bleLocations = "/bleLocations";
+  String _locationStatus = "Not Located";
+  String _authenticationStatus = "Not Authenticated";
   late DatabaseReference db;
   late var allAttendance;
-  // List<BiometricType>? _availableBiometrics;
   String _authorized = 'Not Authorized';
   bool _isAuthenticating = false;
 
@@ -61,6 +63,7 @@ class _StudentScreenState extends State<StudentScreen> {
 
   var beaconInfo = {};
   var bles;
+  var bleLocations;
   var beaconList = [];
   var sendingData = {};
   final studentEmail = FirebaseAuth.instance.currentUser?.email ?? '';
@@ -69,9 +72,7 @@ class _StudentScreenState extends State<StudentScreen> {
   @override
   void initState() {
     studentID = studentEmail.substring(0, 7);
-    // getAttendance();
     displayAttendance();
-    // compareImages();
     if (box.values != null) {
       box.values.forEach((stuSection) {
         _classList.add(stuSection);
@@ -108,13 +109,10 @@ class _StudentScreenState extends State<StudentScreen> {
   }
 
   void readOnlineDB() async {
-    displayToast("Reading from online DB");
-    db = FirebaseDatabase.instance
-        .ref()
-        .child("/bles/fda50693a4e24fb1afcfc6eb07647825");
+    db = FirebaseDatabase.instance.ref().child("/bleLocations");
     DatabaseEvent event = await db.once();
-    bles = event.snapshot.value;
-    bles.forEach((key, value) async {
+    bleLocations = event.snapshot.value;
+    bleLocations.forEach((key, value) async {
       beaconList.add(key);
     });
     for (int j = 0; j < beaconList.length; j++) {
@@ -122,19 +120,18 @@ class _StudentScreenState extends State<StudentScreen> {
       List<double> emp = [];
       beaconInfo[beaconList[j]] = {};
       beaconInfo[beaconList[j]]['rssi'] = empty;
-      beaconInfo[beaconList[j]]['accuracy'] = emp;
-      beaconInfo[beaconList[j]]['name'] = beaconList[j];
+      beaconInfo[beaconList[j]]['Est_Distance'] = emp;
+      beaconInfo[beaconList[j]]['classroom'] = bleLocations[beaconList[j]];
     }
     var box = await Hive.box('bleBox');
     box.clear();
-    bles.forEach((key, value) async {
+    bleLocations.forEach((key, value) async {
       beaconList.add(key);
       await box.put(key, value);
     });
   }
 
   void readOfflineDB() async {
-    displayToast("Reading from offline DB");
     var box = Hive.box('bleBox');
     var data = box.values.toList();
     beaconList = box.keys.toList();
@@ -143,8 +140,8 @@ class _StudentScreenState extends State<StudentScreen> {
       List<double> emp = [];
       beaconInfo[beaconList[j]] = {};
       beaconInfo[beaconList[j]]['rssi'] = empty;
-      beaconInfo[beaconList[j]]['accuracy'] = emp;
-      beaconInfo[beaconList[j]]['name'] = box.get(beaconList[j]);
+      beaconInfo[beaconList[j]]['Est_Distance'] = emp;
+      beaconInfo[beaconList[j]]['classroom'] = box.get(beaconList[j]);
     }
   }
 
@@ -152,127 +149,141 @@ class _StudentScreenState extends State<StudentScreen> {
     await displayAttendance();
   }
 
-  late Timer _timer;
-  int _start = 7;
-
-  void _startTimer() {
-    _start = 7;
-    scan();
-    const oneSec = const Duration(seconds: 1);
-    _timer = new Timer.periodic(
-      oneSec,
-      (Timer timer) {
-        if (_start == 0) {
-          setState(() {
-            timer.cancel();
-          });
-          Navigator.of(context).pop();
-        } else {
-          setState(() {
-            _start--;
-          });
-        }
-      },
-    );
+  int checkScanRequirements() {
+    if (!controller.bluetoothEnabled) {
+      return 1;
+    }
+    if (!controller.locationServiceEnabled) {
+      return 2;
+    }
+    if (!controller.authorizationStatusOk) {
+      return 3;
+    }
+    return 0;
   }
 
   void scan() async {
-    askPermissions();
-    Directory directory = await pathProvider.getApplicationDocumentsDirectory();
-    Hive.init(directory.path);
-    await Hive.openBox("bleBox");
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    if (connectivityResult == ConnectivityResult.mobile ||
-        connectivityResult == ConnectivityResult.wifi) {
-      readOnlineDB();
-    } else {
-      readOfflineDB();
-    }
-    bool blesFound = false;
-    StreamSubscription<RangingResult>? _streamRanging;
-    await flutterBeacon.initializeScanning;
-    final regions = <Region>[
-      Region(
-        identifier: 'myBeacons',
-        proximityUUID: 'fda50693a4e24fb1afcfc6eb07647825',
-      ),
-    ];
-
-    _streamRanging =
-        flutterBeacon.ranging(regions).listen((RangingResult result) {
-      for (var element in result.beacons) {
-        var major = element.major;
-        var minor = element.minor;
-        var uid = "${major}_$minor";
-        beaconInfo[uid]['rssi'].add(element.rssi);
-        beaconInfo[uid]['accuracy'].add(element.accuracy);
-        blesFound = true;
-      }
-    });
-    await Future.delayed(const Duration(seconds: scanDuration));
-    // print(beaconInfo);
-    _streamRanging.cancel();
-    beaconInfo.forEach((key, value) {
-      if (beaconInfo[key]['rssi'].isNotEmpty) {
-        beaconInfo[key]['mean'] = mean(beaconInfo[key]['rssi']);
-        beaconInfo[key]['median'] = median(beaconInfo[key]['rssi']);
-        beaconInfo[key]['mode'] = mode(beaconInfo[key]['rssi']);
-        if (beaconInfo[key]['accuracy'].isNotEmpty) {
-          beaconInfo[key]['beacon_accuracy'] =
-              meanFLoat(beaconInfo[key]['accuracy']);
+    var permissionStatus = await requestPermissions();
+    if (permissionStatus) {
+      var result = checkScanRequirements();
+      if (result == 0) {
+        Directory directory =
+            await pathProvider.getApplicationDocumentsDirectory();
+        Hive.init(directory.path);
+        await Hive.openBox("bleBox");
+        var connectivityResult = await (Connectivity().checkConnectivity());
+        if (connectivityResult == ConnectivityResult.mobile ||
+            connectivityResult == ConnectivityResult.wifi) {
+          readOnlineDB();
+        } else {
+          readOfflineDB();
+          if (beaconInfo.isEmpty) {
+            displayToast("Please turn on Internet before scanning");
+            Navigator.of(context).pop();
+            return;
+          }
         }
-      } else {
-        beaconInfo[key]['mean'] = 0;
-        beaconInfo[key]['median'] = 0;
-        beaconInfo[key]['mode'] = 0;
-        beaconInfo[key]['beacon_accuracy'] = 0;
-      }
-    });
-    if (blesFound) {
-      try {
-        geo.Position pos = await determinePosition();
-        sendReadings(pos);
-      } on Exception catch (_, e) {
-        print("Please turn on Location");
+        bool blesFound = false;
+        StreamSubscription<RangingResult>? _streamRanging;
+        await flutterBeacon.initializeScanning;
+        final regions = <Region>[
+          Region(
+            identifier: 'myBeacons',
+            proximityUUID: 'fda50693a4e24fb1afcfc6eb07647825',
+          ),
+        ];
+        _streamRanging =
+            flutterBeacon.ranging(regions).listen((RangingResult result) {
+          for (var element in result.beacons) {
+            var major = element.major;
+            var minor = element.minor;
+            var uid = "${major}_$minor";
+            if (beaconInfo.containsKey(uid)) {
+              beaconInfo[uid]['rssi'].add(element.rssi);
+              beaconInfo[uid]['Est_Distance'].add(element.accuracy);
+            }
+            blesFound = true;
+          }
+        });
+        await Future.delayed(const Duration(seconds: scanDuration));
+        _streamRanging.cancel();
+        beaconInfo.forEach((key, value) {
+          if (beaconInfo[key]['rssi'].isNotEmpty) {
+            beaconInfo[key]['meanRSSI'] = mean(beaconInfo[key]['rssi']);
+            if (beaconInfo[key]['Est_Distance'].isNotEmpty) {
+              beaconInfo[key]['Mean_Est_Distance'] =
+                  meanFLoat(beaconInfo[key]['Est_Distance']);
+            }
+          } else {
+            beaconInfo[key]['meanRSSI'] = 0;
+            beaconInfo[key]['Mean_Est_Distance'] = 0;
+          }
+        });
+        if (blesFound) {
+          try {
+            await predictPosition();
+            Navigator.of(context).pop();
+            return;
+          } on Exception catch (_, e) {
+            displayToast("Please try again");
+            Navigator.of(context).pop();
+            return;
+          }
+        } else {
+          displayToast("No Beacons found");
+          Navigator.of(context).pop();
+          return;
+        }
+      } else if (result == 1) {
+        displayToast("Please enable Bluetooth");
+        Navigator.of(context).pop();
+        return;
+      } else if (result == 2) {
+        displayToast("Please enable Location");
+        Navigator.of(context).pop();
+        return;
+      } else if (result == 3) {
+        displayToast("Please allow required permissions to scan");
+        Navigator.of(context).pop();
+        return;
       }
     } else {
-      displayToast("No Beacons found");
+      Navigator.of(context).pop();
+      return;
     }
   }
 
-  void sendReadings(geo.Position pos) async {
-    // print(beaconInfo);
-    displayToast("Scaning...");
-    beaconInfo.forEach((key, value) {
-      var temp = beaconInfo[key]['name'] + "_rssi";
-      sendingData[temp] = beaconInfo[key]['mode'];
-      temp = beaconInfo[key]['name'] + "_accuracy";
-      sendingData[temp] = beaconInfo[key]['beacon_accuracy'];
+  Future<void> predictPosition() async {
+    var bleDistance = 'Mean_Est_Distance';
+    var min_distance = 1000.0;
+    var bleWithMinDistance;
+    beaconList.forEach((element) {
+      if (beaconInfo[element][bleDistance] != 0.0) {
+        if (min_distance > beaconInfo[element][bleDistance]) {
+          min_distance = beaconInfo[element][bleDistance];
+          bleWithMinDistance = element;
+        }
+      }
     });
-    var locHeadings = [
-      "Latitude",
-      "Longitude",
-      "Altitude",
-      "Location_Accuracy",
-    ];
-    var locInfo = [
-      pos.latitude,
-      pos.longitude,
-      pos.altitude,
-      pos.accuracy,
-    ];
-    for (int i = 0; i < locHeadings.length; i++) {
-      sendingData[locHeadings[i]] = locInfo[i];
-    }
-    // print(sendingData);
-    var jsonData = json.encode(sendingData);
-    displayToast(jsonData);
-
-    if (beaconInfo['1_1_rssi'] != null) {
-      // var url = Uri.https('192.168.2.1:8000', '/predict');
-      // var response = await http.post(url, body: jsonData);
-      // print('Response status: ${response.statusCode}');
-      // print('Response body: ${response.body}');
+    var max_Rssi = -10000;
+    var bleWithMaxRssi;
+    var bestAverage = 'mode';
+    beaconList.forEach((element) {
+      if (beaconInfo[element][bestAverage] != 0.0) {
+        if (max_Rssi < beaconInfo[element][bestAverage]) {
+          max_Rssi = beaconInfo[element][bestAverage];
+          bleWithMaxRssi = element;
+        }
+      }
+    });
+    if (bleWithMaxRssi == bleWithMinDistance) {
+      setState(() {
+        _locationStatus = bleLocations[bleWithMaxRssi];
+      });
+    } else {
+      setState(() {
+        _locationStatus = 'Please Re-Scan';
+      });
     }
   }
 
@@ -287,7 +298,9 @@ class _StudentScreenState extends State<StudentScreen> {
       time: tm,
       id: iid,
     );
-    attendance.add(am);
+    setState(() {
+      attend.add(am);
+    });
   }
 
   void logout() {
@@ -304,22 +317,22 @@ class _StudentScreenState extends State<StudentScreen> {
     allAttendance = event.snapshot.value;
     if (allAttendance != null) {
       setState(() {
-        attendance.clear();
+        attend.clear();
         allAttendance.forEach((key, value) async {
-          addAttendance(
-            allAttendance[key]['classRoom'],
-            allAttendance[key]['courseName'],
-            allAttendance[key]['date'],
-            allAttendance[key]['section'],
-            allAttendance[key]['teacherName'],
-            allAttendance[key]['time'],
-            key.toString(),
-          );
-          //print(key.toString());
+          if(allAttendance[key][classRoom] == _authenticationStatus){
+            addAttendance(
+              allAttendance[key]['classRoom'],
+              allAttendance[key]['courseName'],
+              allAttendance[key]['date'],
+              allAttendance[key]['section'],
+              allAttendance[key]['teacherName'],
+              allAttendance[key]['time'],
+              key.toString(),
+            );
+          }
         });
       });
     }
-    // displayToast(allAttendance.toString());
   }
 
   Future<File> saveImageToTempFile(img.Image faceImage) async {
@@ -340,11 +353,14 @@ class _StudentScreenState extends State<StudentScreen> {
     return file.path;
   }
 
-  void markAttendance(attendanceModel attendanceObject) async {
+  Future<XFile?> captureImage() async {
     final ImagePicker _picker = ImagePicker();
     final XFile? capturedImage = await _picker.pickImage(
         source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+    return capturedImage;
+  }
 
+  Future<void> authenticate(XFile? capturedImage) async {
     db = FirebaseDatabase.instance.ref().child("/faceAuth/$studentID");
     DatabaseEvent event = await db.once();
     var imageUrl = event.snapshot.value;
@@ -354,43 +370,58 @@ class _StudentScreenState extends State<StudentScreen> {
     res = await compareImages(File(capturedImage!.path), File(storedImage));
 
     if (res == true) {
-      _authorized = "Authorized";
-    } else {
-      _authorized = "Not Authorized";
-    }
-    if (_authorized == "Not Authorized") {
-      displayToast("Please authenticate before marking attendance");
       setState(() {
-        _isLoading = false;
+        _authenticationStatus = "Authenticated";
+      });
+      Navigator.of(context).pop();
+      Future.delayed(Duration(minutes: 5), () {
+        setState(() {
+          _authenticationStatus = "Not Authenticated";
+        });
       });
       return;
     } else {
+      displayToast("Please Try Again");
+      Navigator.of(context).pop();
+      return;
+    }
+  }
+
+  Future<void> updateAuthenticationStatus() async {
+    var image = await captureImage();
+    ProgressIndicator(context, 'Authenticating...  Please Wait.');
+    await authenticate(image);
+  }
+
+  Future<void> markAttendance(attendanceModel attendanceObject) async {
+    if (_authenticationStatus == "Not Authenticated") {
+      displayToast("Please Authenticate before Marking Attendance");
+      return;
+    }
+    if (_authenticationStatus == "Authenticated") {
       var section = null;
       String attendanceID = attendanceObject.id;
       _classList.forEach((stuSection) {
         if (stuSection.className == attendanceObject.courseName) {
           section = stuSection.section;
         }
-        print(stuSection.className + stuSection.section);
       });
-      print(section);
       if (section == null) {
         displayToast(
             "Please add your class and section accurately and then try again");
-        setState(() {
-          _isLoading = false;
-        });
         return;
       }
       db = FirebaseDatabase.instance
           .ref()
           .child("/markAttendance/$attendanceID/${section}/$studentID");
       await db.set("P");
-      displayToast("Attendance Marked");
+      displayToast("Attendance Marked in ${attendanceObject.courseName}-$section");
+      setState(() {
+        _authenticationStatus = "Not Authenticated";
+        _locationStatus = "Not Located";
+        attend.clear();
+      });
     }
-    setState(() {
-      _isLoading = false;
-    });
   }
 
 /////////////////DRAWWER FUNCTIONALITIES/////////////////////////////////////////////
@@ -420,17 +451,6 @@ class _StudentScreenState extends State<StudentScreen> {
         }
       });
     }
-  }
-
-  bool _isLoading = false;
-
-  void _startFunction(attendanceModel bl) {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Call your long-running function here
-    markAttendance(bl);
   }
 
   void _removeFromList(int index) {
@@ -542,12 +562,19 @@ class _StudentScreenState extends State<StudentScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Text('Location: {}',
+                Text('Location: ${_locationStatus}',
                     style: TextStyle(color: Colors.blue.shade600)),
                 // SizedBox(width: 10.0),
                 VerticalDivider(width: 10),
-                Text('Authenticated: {}',
-                    style: TextStyle(color: Colors.blue.shade600)),
+                GestureDetector(
+                  onTap: () async {
+                    await updateAuthenticationStatus();
+                  },
+                  child: Text(
+                    'Auth Status: $_authenticationStatus',
+                    style: TextStyle(color: Colors.blue.shade600),
+                  ),
+                ),
               ],
             ),
           ),
@@ -708,7 +735,7 @@ class _StudentScreenState extends State<StudentScreen> {
                     height: 139.0,
                   ),
                 ),
-                if (attendance.isEmpty)
+                if (attend.isEmpty)
                   Center(
                     child: ListView(
                       children: [
@@ -736,186 +763,165 @@ class _StudentScreenState extends State<StudentScreen> {
                     ),
                   )
                 else
-                  _isLoading
-                      ? Center(
-                          child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(0, 20, 0, 0),
-                                  child: Text(
-                                    'Please wait while we authenticate you',
-                                    style: TextStyle(
-                                        color: Colors.grey.shade500,
-                                        fontSize: 15),
-                                  ),
-                                ),
-                              ]),
-                        )
-                      : ListView(
-                          clipBehavior: Clip.antiAlias,
-                          children: widget.attend.map((bl) {
-                            return Center(
-                              child: GestureDetector(
-                                onTap: () {
-                                  _startFunction(bl);
-                                  //print("tapped");
-                                },
-                                child: Card(
-                                  clipBehavior: Clip.antiAlias,
-                                  margin: const EdgeInsets.symmetric(
-                                      vertical: 16.0, horizontal: 24.0),
-                                  elevation: 8.0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(30.0),
-                                  ),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: [
-                                          Colors.grey.shade700,
-                                          Colors.grey.shade500,
-                                          Colors.grey.shade700
-                                        ],
-                                        // stops: [0.0, 0.5, 1.0],
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(10.0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Center(
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                                // color: Colors.black54,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 4.0,
-                                                      horizontal: 8.0),
-                                              child: Text(
-                                                bl.courseName,
-                                                style: TextStyle(
-                                                  color: cardTextColor,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 24.0,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 16.0),
-                                          Text(
-                                            'Instructor',
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16.0,
-                                            ),
-                                          ),
-                                          Text(
-                                            bl.teacherName,
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontSize: 18.0,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Divider(
-                                            color: cardTextColor,
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Text(
-                                            'Day',
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16.0,
-                                            ),
-                                          ),
-                                          Text(
-                                            bl.date,
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontSize: 18.0,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Divider(
-                                            color: cardTextColor,
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Text(
-                                            'Time Slot',
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16.0,
-                                            ),
-                                          ),
-                                          Text(
-                                            bl.time,
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontSize: 18.0,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Divider(
-                                            color: cardTextColor,
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Text(
-                                            'Section',
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16.0,
-                                            ),
-                                          ),
-                                          Text(
-                                            bl.section,
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontSize: 18.0,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Divider(
-                                            color: cardTextColor,
-                                          ),
-                                          const SizedBox(height: 8.0),
-                                          Text(
-                                            'Classroom',
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16.0,
-                                            ),
-                                          ),
-                                          Text(
-                                            bl.classRoom,
-                                            style: TextStyle(
-                                              color: cardTextColor,
-                                              fontSize: 18.0,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                  ListView(
+                    clipBehavior: Clip.antiAlias,
+                    children: attend.map((bl) {
+                      return Center(
+                        child: GestureDetector(
+                          onTap: () async {
+                            await updateAuthenticationStatus();
+                            await markAttendance(bl);
+                          },
+                          child: Card(
+                            clipBehavior: Clip.antiAlias,
+                            margin: const EdgeInsets.symmetric(
+                                vertical: 16.0, horizontal: 24.0),
+                            elevation: 8.0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30.0),
+                            ),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.grey.shade700,
+                                    Colors.grey.shade500,
+                                    Colors.grey.shade700
+                                  ],
+                                  // stops: [0.0, 0.5, 1.0],
                                 ),
                               ),
-                            );
-                          }).toList(),
+                              child: Padding(
+                                padding: const EdgeInsets.all(10.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Center(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(8.0),
+                                          // color: Colors.black54,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 4.0, horizontal: 8.0),
+                                        child: Text(
+                                          bl.courseName,
+                                          style: TextStyle(
+                                            color: cardTextColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 24.0,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    Text(
+                                      'Instructor',
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      bl.teacherName,
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontSize: 18.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Divider(
+                                      color: cardTextColor,
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      'Day',
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      bl.date,
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontSize: 18.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Divider(
+                                      color: cardTextColor,
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      'Time Slot',
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      bl.time,
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontSize: 18.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Divider(
+                                      color: cardTextColor,
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      'Section',
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      bl.section,
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontSize: 18.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Divider(
+                                      color: cardTextColor,
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      'Classroom',
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      bl.classRoom,
+                                      style: TextStyle(
+                                        color: cardTextColor,
+                                        fontSize: 18.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
+                      );
+                    }).toList(),
+                  ),
               ],
             ),
           ),
@@ -923,26 +929,8 @@ class _StudentScreenState extends State<StudentScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Show the alert dialog
-          showDialog(
-            context: context,
-            builder: (context) {
-              return StatefulBuilder(builder: (context, setState) {
-                return AlertDialog(
-                    title: Text('Scanning'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16.0),
-                        Text('Scannig Location'),
-                      ],
-                    ));
-              });
-            },
-          );
-          // Start the long running function
-          _startTimer();
+          ProgressIndicator(context, 'Scanning...  Please Wait.');
+          scan();
         },
         backgroundColor: Colors.blue.shade600,
         child: const Icon(Icons.search, color: Colors.black),
@@ -1058,7 +1046,30 @@ class _StudentScreenState extends State<StudentScreen> {
     );
   }
 
+  void ProgressIndicator(BuildContext context, String displayText) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+              title: Text(displayText),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(
+                    height: 16.0,
+                    width: 20,
+                  ),
+                ],
+              ));
+        });
+      },
+    );
+  }
+
   handleOpenLocationSettings() async {
+    requestPermissions();
     if (Platform.isAndroid) {
       await flutterBeacon.openLocationSettings;
     } else if (Platform.isIOS) {
@@ -1083,6 +1094,7 @@ class _StudentScreenState extends State<StudentScreen> {
   }
 
   handleOpenBluetooth() async {
+    requestPermissions();
     if (Platform.isAndroid) {
       try {
         await flutterBeacon.openBluetoothSettings;
@@ -1107,5 +1119,29 @@ class _StudentScreenState extends State<StudentScreen> {
         },
       );
     }
+  }
+}
+
+class ProgressIndicatorWidget extends StatelessWidget {
+  String displayText;
+  ProgressIndicatorWidget({
+    Key? key,
+    required this.displayText,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        CircularProgressIndicator(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 20, 0, 0),
+          child: Text(
+            displayText,
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+          ),
+        ),
+      ]),
+    );
   }
 }

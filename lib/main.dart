@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,6 +16,7 @@ import 'controller/requirement_state_controller.dart';
 Future main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await requestPermissions();
   Directory directory = await pathProvider.getApplicationDocumentsDirectory();
   Hive.init(directory.path);
   Hive.registerAdapter(studentSectionsAdapter());

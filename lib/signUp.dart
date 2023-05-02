@@ -30,173 +30,155 @@ class _SignUpState extends State<SignUp> {
   late DatabaseReference db;
   String errorMessage = '';
 
-  void askPermissions() async {
-    // Request location permission
-    var status = await Permission.location.status;
-    if (status.isDenied) {
-      var result = await Permission.location.request();
-      if (result.isGranted) {
-        displayToast("Location Permission Granted");
-      } else {
-        displayToast("Location Permission Denied");
-      }
-    }
-    // Request Bluetooth permission
-    status = await Permission.bluetoothScan.status;
-    if (status.isDenied) {
-      var result = await Permission.bluetoothScan.request();
-      if (result.isGranted) {
-        displayToast("Bluetooth Permission Granted");
-      } else {
-        displayToast("Bluetooth Permission Denied");
-      }
-    }
-    // Request Bluetooth permission
-    status = await Permission.bluetoothConnect.status;
-    if (status.isDenied) {
-      var result = await Permission.bluetoothConnect.request();
-      if (result.isGranted) {
-        displayToast("Bluetooth Permission Granted");
-      } else {
-        displayToast("Bluetooth Permission Denied");
-      }
-    }
-  }
-
-  Future<String> getDeviceUID() async {
-    var UID;
-    var deviceInfo = DeviceInfoPlugin();
-    if (Platform.isIOS) {
-      var iosDeviceInfo = await deviceInfo.iosInfo;
-      UID = iosDeviceInfo.identifierForVendor; // unique ID on iOS
-    } else if (Platform.isAndroid) {
-      var androidDeviceInfo = await deviceInfo.androidInfo;
-      UID = androidDeviceInfo.id; // unique ID on Android
-    }
-    return UID;
-  }
-
-  Future signUp() async {
-    var UID = await getDeviceUID();
+  Future<bool> validateUser() async {
     String enteredEmail = emailController.text.trim();
     String enteredStudentID = enteredEmail.substring(0, 7);
     String enteredEmailDomain = enteredEmail.substring(7);
+    String enteredPassword = passController.text.trim();
+    String enteredConfirmPassword = confirmpassctrl.text.trim();
     if (enteredEmailDomain != "@nu.edu.pk") {
-      // displayToast("Please enter NU Email ID");
       setState(() {
         errorMessage = "Please enter NU Email ID";
       });
+      return false;
     }
     bool checkResult = checkUserInput(enteredStudentID);
     if (checkResult == false) {
-      //displayToast("Invalid NU Email ID");
       setState(() {
         errorMessage = "Invalid NU Email ID";
       });
-      Navigator.of(context).pop();
-      return;
+      return false;
     }
     db = FirebaseDatabase.instance.ref().child("/UID/$enteredStudentID");
     DatabaseEvent event = await db.once();
     var studentID_Record = event.snapshot.value;
     if (studentID_Record != null) {
-      //displayToast("This Student ID already exists.\nPlease Login instead");
       setState(() {
         errorMessage = "This Student ID already exists.\nPlease Login instead";
       });
-      Navigator.of(context).pop();
-      return;
+      return false;
     }
-    String enteredPassword = passController.text.trim();
-    String enteredConfirmPassword = confirmpassctrl.text.trim();
     if (enteredPassword != enteredConfirmPassword) {
-      //displayToast("Password Mismatch");
       setState(() {
         errorMessage = "Password Mismatch";
       });
-      Navigator.of(context).pop();
-      return;
+      return false;
     } else if (enteredPassword.length < 6) {
-      //displayToast("Password length should be minimum 6");
       setState(() {
         errorMessage = "Password length should be minimum 6";
       });
-      Navigator.of(context).pop();
-      return;
+      return false;
     }
+    return true;
+  }
+
+  Future<void> storeInfoToFirebase() async {
+    var UID = await getDeviceUID();
+    String enteredEmail = emailController.text.trim();
+    String enteredStudentID = enteredEmail.substring(0, 7);
+    String enteredPassword = passController.text.trim();
     try {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: enteredEmail, password: enteredPassword);
-      await storePictureToDB(enteredStudentID);
       db = FirebaseDatabase.instance.ref().child("/UID/$enteredStudentID");
       await db.set(UID);
-      //displayToast("Account Created Succesfully");
-      setState(() {
-        errorMessage = "Account Created Succesfully";
-      });
+      Navigator.of(context).pop();
+      displayToast("Account Created Succesfully");
+      await Future.delayed(Duration(seconds: 2));
       Navigator.push(context,
           MaterialPageRoute(builder: (BuildContext context) {
-            Navigator.of(context).pop();
+        Navigator.of(context).pop();
         return const SignInFive();
       }));
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
-        //displayToast("This Student ID already exists.\nPlease Login instead");
         setState(() {
           errorMessage =
               "This Student ID already exists.\nPlease Login instead";
         });
       } else if (e.code == 'weak-password') {
-        //displayToast("Please use a stronger Password");
         setState(() {
           errorMessage = "Please use a stronger Password";
         });
       } else {
-        //displayToast("Unknown Error Occurred.\nPlease try again later");
         setState(() {
           errorMessage = "Unknown Error Occurred.\nPlease try again later";
         });
       }
     } catch (e) {
-      //displayToast("Unknown Error Occurred.\nPlease try again later");
       setState(() {
         errorMessage = "Unknown Error Occurred.\nPlease try again later";
       });
     }
   }
 
-  Future<void> storePictureToDB(String studentID) async {
-    final imagePicker = ImagePicker();
-    final XFile? photo = await imagePicker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-    );
+  Future<XFile?> captureImage() async {
+    final ImagePicker _picker = ImagePicker();
+    final XFile? capturedImage = await _picker.pickImage(
+        source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
+    return capturedImage;
+  }
+
+
+  Future<bool> storePictureToDB(String studentID, XFile? photo) async {
     final face = await detectFace(photo!.path);
 
-    if (face.length != 1) {
+    if (face.length == 0) {
       displayToast("Face Not Detected. Please Re-capture your photo");
-      return;
+      displayToast("Sign Up Failed. Please Try Again");
+      Navigator.of(context).pop();
+      return false;
+    }
+    if (face.length > 1) {
+      displayToast("Multiple Faces Detected. Please Re-capture your photo");
+      displayToast("Sign Up Failed. Please Try Again");
+      Navigator.of(context).pop();
+      return false;
     }
     var fileImage = File(photo.path);
+    try {
+      final storageReference =
+          FirebaseStorage.instance.ref().child('images/$studentID');
+      final uploadTask = storageReference.putFile(fileImage);
+      await uploadTask;
 
-    final storageReference =
-        FirebaseStorage.instance.ref().child('images/$studentID');
-    final uploadTask = storageReference.putFile(fileImage);
-    await uploadTask;
+      // Get the download URL of the image from Firebase Storage
+      final downloadUrl = await storageReference.getDownloadURL();
 
-    // Get the download URL of the image from Firebase Storage
-    final downloadUrl = await storageReference.getDownloadURL();
+      // Store the download URL in Firebase Realtime Database
+      final dbRef =
+          FirebaseDatabase.instance.ref().child('/faceAuth/$studentID');
+      await dbRef.set(downloadUrl);
 
-    // Store the download URL in Firebase Realtime Database
-    final dbRef = FirebaseDatabase.instance.ref().child('/faceAuth/$studentID');
-    await dbRef.set(downloadUrl);
-
+      return true;
+    } catch (e) {
+      displayToast("Unknown Error Occured while saving your image");
+      displayToast("Sign Up Failed. Please Try Again");
+      Navigator.of(context).pop();
+      return false;
+    }
     // displayToast('Picture stored to database');
+  }
+
+  Future<void> signUp() async {
+    var validationStatus = await validateUser();
+    if(validationStatus){
+      var image = await captureImage();
+      if(image != null){
+        ProgressIndicator(context, 'Creating Account...  Please Wait.');
+        String enteredEmail = emailController.text.trim();
+        String enteredStudentID = enteredEmail.substring(0, 7);
+        var pictureStatus = await storePictureToDB(enteredStudentID, image);
+        if(pictureStatus){
+          await storeInfoToFirebase();
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    askPermissions();
+    requestPermissions();
     final size = MediaQuery.of(context).size;
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
@@ -330,6 +312,7 @@ class _SignUpState extends State<SignUp> {
   }
 
   Widget passwordTextField(Size size) {
+    bool obscurePassword = true;
     return Container(
       alignment: Alignment.center,
       height: size.height / 12,
@@ -363,15 +346,16 @@ class _SignUpState extends State<SignUp> {
 
             //password textField
             Expanded(
+              // Define a bool variable to toggle password visibility
               child: TextFormField(
                 maxLines: 1,
                 controller: passController,
                 cursorColor: Colors.white70,
                 keyboardType: TextInputType.visiblePassword,
-                obscureText: true,
+                obscureText: obscurePassword,
                 validator: (value) {
                   if (value!.isEmpty || value.length < 7) {
-                    return 'Password must be atleast 7 characters long';
+                    return 'Password must be at least 7 characters long';
                   }
                   return null;
                 },
@@ -381,14 +365,28 @@ class _SignUpState extends State<SignUp> {
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
-                    hintText: 'Enter your password',
-                    hintStyle: GoogleFonts.inter(
-                      fontSize: 14.0,
+                  hintText: 'Enter your password',
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 14.0,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  suffixIcon: GestureDetector(
+                    onTap: () {
+                      // Toggle password visibility here
+                      setState(() {
+                        obscurePassword = !obscurePassword;
+                      });
+                    },
+                    child: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
                       color: Colors.white70,
-                      fontWeight: FontWeight.w500,
                     ),
-                    border: InputBorder.none),
+                  ),
+                ),
               ),
+
             ),
           ],
         ),
@@ -397,6 +395,7 @@ class _SignUpState extends State<SignUp> {
   }
 
   Widget confirmpasswordTextField(Size size) {
+    bool obscureConfirmPassword = true;
     return Container(
       alignment: Alignment.center,
       height: size.height / 12,
@@ -435,10 +434,10 @@ class _SignUpState extends State<SignUp> {
                 controller: confirmpassctrl,
                 cursorColor: Colors.white70,
                 keyboardType: TextInputType.visiblePassword,
-                obscureText: true,
+                obscureText: obscureConfirmPassword,
                 validator: (value) {
                   if (value!.isEmpty || value.length < 7) {
-                    return 'Password must be atleast 7 characters long';
+                    return 'Password must be at least 7 characters long';
                   }
                   return null;
                 },
@@ -448,13 +447,26 @@ class _SignUpState extends State<SignUp> {
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
-                    hintText: 'Confirm your password',
-                    hintStyle: GoogleFonts.inter(
-                      fontSize: 14.0,
+                  hintText: 'Confirm your password',
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 14.0,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  suffixIcon: GestureDetector(
+                    onTap: () {
+                      // Toggle password visibility here
+                      setState(() {
+                        obscureConfirmPassword = !obscureConfirmPassword;
+                      });
+                    },
+                    child: Icon(
+                      obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
                       color: Colors.white70,
-                      fontWeight: FontWeight.w500,
                     ),
-                    border: InputBorder.none),
+                  ),
+                ),
               ),
             ),
           ],
@@ -565,25 +577,8 @@ class _SignUpState extends State<SignUp> {
 
   Widget signUpButton(Size size) {
     return ElevatedButton(
-      onPressed: () {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return StatefulBuilder(builder: (context, setState) {
-              return AlertDialog(
-                  title: Text('Please Wait'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16.0),
-                      Text('Signing up'),
-                    ],
-                  ));
-            });
-          },
-        );
-        signUp();
+      onPressed: () async {
+        await signUp();
       },
       style: ElevatedButton.styleFrom(
           alignment: Alignment.center,
@@ -598,6 +593,28 @@ class _SignUpState extends State<SignUp> {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+
+  void ProgressIndicator(BuildContext context, String displayText) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+              title: Text(displayText),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(
+                    height: 16.0,
+                    width: 20,
+                  ),
+                ],
+              ));
+        });
+      },
     );
   }
 

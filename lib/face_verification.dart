@@ -24,6 +24,15 @@ Future<bool> compareImages(File image1, File image2) async {
   final faces1 = await detectFace(image1.path);
   final faces2 = await detectFace(image2.path);
 
+  if (faces1.isEmpty) {
+    displayToast("No Face Detected");
+    return false;
+  }
+  if(faces1.length > 1){
+    displayToast("Multiple Faces Detected");
+    return false;
+  }
+
   // //Initialize Google ML Kit face detector
   // final inputImage1 = InputImage.fromFilePath(image1.path);
   // final inputImage2 = InputImage.fromFilePath(image2.path);
@@ -97,14 +106,13 @@ Future<bool> compareImages(File image1, File image2) async {
   // double similarity = dotProduct / (mag1 * mag2);
   var similarity = calculateCosineSimilarity(output1, output2);
   print(similarity);
-  displayToast(similarity.toString());
+  // displayToast(similarity.toString());
 // Determine if the two images are of the same person or not based on the cosine similarity threshold
-  return similarity >= 0.7;
+  return similarity >= 0.75;
 }
 
 double calculateCosineSimilarity(
     List<List<double>> output1, List<List<double>> output2) {
-      
   // Calculate the dot product of output1 and output2
   double dotProduct = 0.0;
   for (int i = 0; i < output1[0].length; i++) {

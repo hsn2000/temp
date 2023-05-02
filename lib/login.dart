@@ -26,94 +26,6 @@ class _SignInFiveState extends State<SignInFive> {
   late DatabaseReference db;
   String errorMessage = '';
 
-  Future<void> requestPermissions() async {
-    Map<Permission, PermissionStatus> permissions = await [
-      Permission.location,
-      Permission.locationWhenInUse,
-      Permission.locationAlways,
-      Permission.bluetoothScan,
-      Permission.bluetooth,
-    ].request();
-
-    if (permissions[Permission.locationWhenInUse] != PermissionStatus.granted ||
-        permissions[Permission.bluetoothScan] != PermissionStatus.granted) {
-      // Handle the case where the user denies one or both of the permissions
-      displayToast("Not all Permissions Granted");
-    }
-  }
-
-  void askPermissions() async {
-    // Request location permission
-    var status = await Permission.location.status;
-    if (status.isDenied) {
-      var result = await Permission.location.request();
-      if (result.isGranted) {
-        displayToast("Location Permission Granted");
-      } else {
-        displayToast("Location Permission Denied");
-      }
-    }
-    // Request Bluetooth permission
-    status = await Permission.bluetoothScan.status;
-    if (status.isDenied) {
-      var result = await Permission.bluetoothScan.request();
-      if (result.isGranted) {
-        displayToast("Bluetooth Permission Granted");
-      } else {
-        displayToast("Bluetooth Permission Denied");
-      }
-    }
-    // Request Bluetooth permission
-    status = await Permission.bluetoothConnect.status;
-    if (status.isDenied) {
-      var result = await Permission.bluetoothConnect.request();
-      if (result.isGranted) {
-        displayToast("Bluetooth Permission Granted");
-      } else {
-        displayToast("Bluetooth Permission Denied");
-      }
-    }
-  }
-
-  void nearbyPermission() async {
-    // Request Bluetooth permission
-    var status = await Permission.bluetoothScan.status;
-    if (status.isDenied) {
-      var result = await Permission.bluetoothScan.request();
-      if (result.isGranted) {
-        displayToast("Permission Granted");
-      } else {
-        displayToast("Permission Denied");
-      }
-    }
-  }
-
-  void locationPermission() async {
-    // Request location permission
-    var status = await Permission.locationAlways.status;
-    if (status.isDenied) {
-      var result = await Permission.locationAlways.request();
-      if (result.isGranted) {
-        displayToast("Permission Granted");
-      } else {
-        displayToast("Permission Denied");
-      }
-    }
-  }
-
-  Future<String> getDeviceUID() async {
-    var UID;
-    var deviceInfo = DeviceInfoPlugin();
-    if (Platform.isIOS) {
-      var iosDeviceInfo = await deviceInfo.iosInfo;
-      UID = iosDeviceInfo.identifierForVendor; // unique ID on iOS
-    } else if (Platform.isAndroid) {
-      var androidDeviceInfo = await deviceInfo.androidInfo;
-      UID = androidDeviceInfo.id; // unique ID on Android
-    }
-    return UID;
-  }
-
   Future signIn() async {
     var UID = await getDeviceUID();
     String enteredEmail = emailController.text.trim();
@@ -191,28 +103,16 @@ class _SignInFiveState extends State<SignInFive> {
     // }
   }
 
-  void displayToast(String message) {
-    Fluttertoast.showToast(
-        msg: message,
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        timeInSecForIosWeb: 1,
-        backgroundColor: const Color(0xFFF56B3F),
-        textColor: Colors.white,
-        fontSize: 16.0);
-  }
-
   @override
   void dispose() {
     emailController.dispose();
     passController.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    askPermissions();
+    requestPermissions();
     final size = MediaQuery.of(context).size;
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
